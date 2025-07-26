@@ -45,13 +45,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     ],
   };
 
-  late String selectedDay;
+  late final String todayLabel;
+
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    selectedDay = _getDayLabel(now.weekday);
+    todayLabel = _getDayLabel(now.weekday);
   }
 
   String _getDayLabel(int weekday) {
@@ -77,7 +78,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     double progress = (todayTotal / goal).clamp(0, 1);
-    final isToday = selectedDay == _getDayLabel(DateTime.now().weekday);
+    final isToday = todayLabel == _getDayLabel(DateTime.now().weekday);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -120,6 +121,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           Text("Today's Total"),
                           SizedBox(height: 4),
                           LinearProgressIndicator(
+                            minHeight:8,
                             value: progress,
                             backgroundColor: Colors.blue[100],
                             color: Colors.blue,
@@ -128,27 +130,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: Container(
-                      margin: EdgeInsets.only(left: 8),
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(Icons.trending_up, color: Colors.green),
-                          SizedBox(height: 8),
-                          Text('${(progress * 100).toStringAsFixed(0)}%',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 18)),
-                          SizedBox(height: 4),
-                          Text('Goal Progress'),
-                        ],
-                      ),
-                    ),
-                  )
                 ],
               ),
               SizedBox(height: 30),
@@ -196,40 +177,40 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               Text("Daily Water Log",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               SizedBox(height: 12),
-              SizedBox(
-                height: 50,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: dailyLogs.keys.map((day) {
-                    final isSelected = day == selectedDay;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          selectedDay = day;
-                        });
-                      },
-                      child: Container(
-                        margin: EdgeInsets.symmetric(horizontal: 6),
-                        padding:
-                        EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color:
-                          isSelected ? Colors.blue : Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Center(
-                          child: Text(day,
-                              style: TextStyle(
-                                color:
-                                isSelected ? Colors.white : Colors.black87,
-                                fontWeight: FontWeight.bold,
-                              )),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
+              // SizedBox(
+              //   height: 50,
+              //   child: ListView(
+              //     scrollDirection: Axis.horizontal,
+              //     children: dailyLogs.keys.map((day) {
+              //       final isSelected = day == selectedDay;
+              //       return GestureDetector(
+              //         onTap: () {
+              //           setState(() {
+              //             selectedDay = day;
+              //           });
+              //         },
+              //         child: Container(
+              //           margin: EdgeInsets.symmetric(horizontal: 6),
+              //           padding:
+              //           EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              //           decoration: BoxDecoration(
+              //             color:
+              //             isSelected ? Colors.blue : Colors.grey.shade300,
+              //             borderRadius: BorderRadius.circular(20),
+              //           ),
+              //           child: Center(
+              //             child: Text(day,
+              //                 style: TextStyle(
+              //                   color:
+              //                   isSelected ? Colors.white : Colors.black87,
+              //                   fontWeight: FontWeight.bold,
+              //                 )),
+              //           ),
+              //         ),
+              //       );
+              //     }).toList(),
+              //   ),
+              // ),
               SizedBox(height: 16),
               Container(
                 decoration: BoxDecoration(
@@ -237,7 +218,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
-                  children: (dailyLogs[selectedDay] ?? [])
+                  children: (dailyLogs[todayLabel] ?? [])
                       .asMap()
                       .entries
                       .map((entry) {
@@ -260,7 +241,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         icon: Icon(Icons.delete, color: Colors.red),
                         onPressed: () {
                           setState(() {
-                            dailyLogs[selectedDay]!.removeAt(index);
+                            dailyLogs[todayLabel]!.removeAt(index);
                           });
                         },
                       )

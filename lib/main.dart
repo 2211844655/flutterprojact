@@ -67,7 +67,17 @@ class _HomeScreenState extends State<HomeScreen> {
   double goal = 3.0;
   bool goalReachedNotified = false;
 
+  TextEditingController _customController = TextEditingController();
+
+
   void addWater(double amount) {
+
+    @override
+    void dispose() {
+      _customController.dispose();
+      super.dispose();
+    }
+
     setState(() {
       currentWater += amount;
       double progress = (currentWater / goal).clamp(0, 1);
@@ -193,7 +203,49 @@ class _HomeScreenState extends State<HomeScreen> {
                 drinkCard('Bottle', 500, Colors.green, Icons.local_drink_outlined, () => addWater(0.5)),
                 drinkCard('Large', 1000, Colors.orange, Icons.liquor, () => addWater(1.0)),
               ],
-            )
+            ),
+
+            SizedBox(height: 30),
+            Text('Or enter custom amount (ml)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _customController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: 'Enter amount in ml',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: () {
+                    if (_customController.text.isNotEmpty) {
+                      double? value = double.tryParse(_customController.text);
+                      if (value != null && value > 0) {
+                        addWater(value / 1000); // نحوله من ml إلى L
+                        _customController.clear();
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Please enter a valid number')),
+                        );
+                      }
+                    }
+                  },
+                  child: Text('Add'),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: 25, vertical: 25),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    backgroundColor: Colors.blue,
+                  ),
+                ),
+              ],
+            ),
+
           ],
         ),
       ),
