@@ -3,8 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
-// استخدام prefs كمتغير عام من main.dart
-import 'main.dart';
+import 'main.dart'; // تأكد إنك موفر prefs من هنا
 
 class AnalyticsScreen extends StatefulWidget {
   @override
@@ -12,12 +11,12 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  double todayTotal = 0.0; // سيتم حسابه من dailyLogs
-  double currentDailyGoal = 3.0; // الهدف الحالي، سيتم تحميله من SharedPreferences
+  double todayTotal = 0.0;
+  double currentDailyGoal = 3.0;
   final int daysToShow = 14;
 
   Map<String, List<Map<String, String>>> dailyLogs = {};
-  Map<String, double> dailyGoals = {}; // لتخزين الهدف لكل يوم
+  Map<String, double> dailyGoals = {};
   late String selectedDay;
 
   @override
@@ -29,10 +28,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Future<void> _loadData() async {
-    // تحميل الهدف الحالي
     currentDailyGoal = prefs.getDouble('dailyGoal') ?? 3.0;
 
-    // تحميل جميع سجلات المياه
     final String? savedLogsJson = prefs.getString('dailyLogs');
     if (savedLogsJson != null) {
       dailyLogs = Map<String, List<Map<String, String>>>.from(
@@ -43,21 +40,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 .toList())),
       );
     } else {
-      dailyLogs = {}; // تهيئة الخريطة فارغة إذا لم يكن هناك سجلات
+      dailyLogs = {};
     }
 
-    // تحميل الأهداف اليومية المحفوظة
     final String? savedDailyGoalsJson = prefs.getString('dailyGoals');
     if (savedDailyGoalsJson != null) {
       dailyGoals = Map<String, double>.from(
-        (json.decode(savedDailyGoalsJson) as Map).map((key, value) => MapEntry(key, value as double)),
+        (json.decode(savedDailyGoalsJson) as Map)
+            .map((key, value) => MapEntry(key, value as double)),
       );
     } else {
-      dailyGoals = {}; // تهيئة الخريطة فارغة إذا لم يكن هناك أهداف
+      dailyGoals = {};
     }
 
-    todayTotal = _calculateTotal(selectedDay); // حساب الإجمالي لليوم المحدد
-
+    todayTotal = _calculateTotal(selectedDay);
     setState(() {});
   }
 
@@ -70,14 +66,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   void _removeLogEntry(int index) {
     setState(() {
-      if (dailyLogs[selectedDay] != null && dailyLogs[selectedDay]!.isNotEmpty) {
+      if (dailyLogs[selectedDay] != null &&
+          dailyLogs[selectedDay]!.isNotEmpty) {
         String amountStr = dailyLogs[selectedDay]![index]['amount'] ?? '';
         double amountValue = _parseAmount(amountStr);
         dailyLogs[selectedDay]!.removeAt(index);
-        todayTotal = (todayTotal - amountValue).clamp(0, double.infinity); // تحديث الإجمالي
-
-        _saveData(); // حفظ التغييرات بعد الحذف
+        todayTotal =
+            (todayTotal - amountValue).clamp(0, double.infinity);
+        _saveData();
       }
+    });
+  }
+
+  void _resetTodayLogs() {
+    setState(() {
+      dailyLogs.remove(selectedDay);
+      todayTotal = 0.0;
+      _saveData();
     });
   }
 
@@ -97,7 +102,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   double _calculateTotal(String date) {
     final logs = dailyLogs[date] ?? [];
-    return logs.fold(0.0, (sum, item) => sum + _parseAmount(item['amount']!));
+    return logs.fold(
+        0.0, (sum, item) => sum + _parseAmount(item['amount']!));
   }
 
   List<String> _generateLastDates(int count) {
@@ -113,7 +119,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     double progress = (todayTotal / currentDailyGoal).clamp(0, 1);
-    final isToday = selectedDay == DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final isToday =
+        selectedDay == DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -206,6 +213,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   }).toList(),
                 ),
               ),
+
+              // ✅ زر Reset
+              if (isToday && (dailyLogs[selectedDay]?.isNotEmpty ?? false))
+                Padding(
+                  padding: const EdgeInsets.only(top: 10.0),
+                  child: Center(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                      ),
+                      onPressed: () {
+                        _resetTodayLogs();
+                      },
+                      icon: Icon(Icons.refresh),
+                      label: Text("Reset Today's Logs"),
+                    ),
+                  ),
+                ),
+
               SizedBox(height: 30),
               Text("History",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
@@ -213,7 +239,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               Column(
                 children: _generateLastDates(daysToShow).map((date) {
                   double total = _calculateTotal(date);
-                  // استخدم الهدف المحفوظ لذلك اليوم، وإلا استخدم الهدف الحالي كافتراضي
                   double dayGoal = dailyGoals[date] ?? currentDailyGoal;
                   bool reached = total >= dayGoal;
                   List<Map<String, String>> logs = dailyLogs[date] ?? [];
@@ -226,8 +251,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           color: reached ? Colors.green : Colors.red),
                       title: Text(DateFormat('yyyy-MM-dd')
                           .format(DateTime.parse(date))),
-                      subtitle:
-                      Text('Total: ${total.toStringAsFixed(2)} L / Goal: ${dayGoal.toStringAsFixed(1)} L'),
+                      subtitle: Text(
+                          'Total: ${total.toStringAsFixed(2)} L / Goal: ${dayGoal.toStringAsFixed(1)} L'),
                       children: logs.isEmpty
                           ? [
                         ListTile(
