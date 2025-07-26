@@ -6,7 +6,7 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  final double todayTotal = 2.3;
+  double todayTotal = 2.3; // لازم تتغير لما تحذف سجل الميه
   final double goal = 3.0;
 
   final Map<String, double> weeklyData = {
@@ -45,14 +45,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     ],
   };
 
-  late final String todayLabel;
-
+  late String selectedDay;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    todayLabel = _getDayLabel(now.weekday);
+    selectedDay = _getDayLabel(now.weekday);
   }
 
   String _getDayLabel(int weekday) {
@@ -75,10 +74,38 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
+  void _removeLogEntry(int index) {
+    setState(() {
+      if (dailyLogs[selectedDay] != null && dailyLogs[selectedDay]!.isNotEmpty) {
+        // نقص الكمية من todayTotal حسب اللي حذفناه (نحوّل ml أو L لنوع double)
+        String amountStr = dailyLogs[selectedDay]![index]['amount'] ?? '';
+        double amountValue = _parseAmount(amountStr);
+        todayTotal = (todayTotal - amountValue).clamp(0, double.infinity);
+
+        dailyLogs[selectedDay]!.removeAt(index);
+      }
+    });
+  }
+
+  double _parseAmount(String amount) {
+    // متوقع شكل '+250ml' أو '+1.0L'
+    try {
+      String clean = amount.replaceAll('+', '').toLowerCase();
+      if (clean.endsWith('ml')) {
+        String numStr = clean.replaceAll('ml', '').trim();
+        return double.parse(numStr) / 1000.0; // نحول مللتر للتر
+      } else if (clean.endsWith('l')) {
+        String numStr = clean.replaceAll('l', '').trim();
+        return double.parse(numStr);
+      }
+    } catch (_) {}
+    return 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     double progress = (todayTotal / goal).clamp(0, 1);
-    final isToday = todayLabel == _getDayLabel(DateTime.now().weekday);
+    final isToday = selectedDay == _getDayLabel(DateTime.now().weekday);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -100,7 +127,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   style: TextStyle(color: Colors.grey[600])),
               SizedBox(height: 20),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
                     child: Container(
@@ -121,7 +147,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           Text("Today's Total"),
                           SizedBox(height: 4),
                           LinearProgressIndicator(
-                            minHeight:8,
                             value: progress,
                             backgroundColor: Colors.blue[100],
                             color: Colors.blue,
@@ -173,44 +198,43 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 }).toList(),
               ),
               SizedBox(height: 30),
-
               Text("Daily Water Log",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               SizedBox(height: 12),
-              // SizedBox(
-              //   height: 50,
-              //   child: ListView(
-              //     scrollDirection: Axis.horizontal,
-              //     children: dailyLogs.keys.map((day) {
-              //       final isSelected = day == selectedDay;
-              //       return GestureDetector(
-              //         onTap: () {
-              //           setState(() {
-              //             selectedDay = day;
-              //           });
-              //         },
-              //         child: Container(
-              //           margin: EdgeInsets.symmetric(horizontal: 6),
-              //           padding:
-              //           EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              //           decoration: BoxDecoration(
-              //             color:
-              //             isSelected ? Colors.blue : Colors.grey.shade300,
-              //             borderRadius: BorderRadius.circular(20),
-              //           ),
-              //           child: Center(
-              //             child: Text(day,
-              //                 style: TextStyle(
-              //                   color:
-              //                   isSelected ? Colors.white : Colors.black87,
-              //                   fontWeight: FontWeight.bold,
-              //                 )),
-              //           ),
-              //         ),
-              //       );
-              //     }).toList(),
-              //   ),
-              // ),
+              SizedBox(
+                height: 50,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: dailyLogs.keys.map((day) {
+                    final isSelected = day == selectedDay;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          selectedDay = day;
+                        });
+                      },
+                      child: Container(
+                        margin: EdgeInsets.symmetric(horizontal: 6),
+                        padding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color:
+                          isSelected ? Colors.blue : Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Center(
+                          child: Text(day,
+                              style: TextStyle(
+                                color:
+                                isSelected ? Colors.white : Colors.black87,
+                                fontWeight: FontWeight.bold,
+                              )),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
               SizedBox(height: 16),
               Container(
                 decoration: BoxDecoration(
@@ -218,7 +242,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
-                  children: (dailyLogs[todayLabel] ?? [])
+                  children: (dailyLogs[selectedDay] ?? [])
                       .asMap()
                       .entries
                       .map((entry) {
@@ -240,9 +264,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           ? IconButton(
                         icon: Icon(Icons.delete, color: Colors.red),
                         onPressed: () {
-                          setState(() {
-                            dailyLogs[todayLabel]!.removeAt(index);
-                          });
+                          _removeLogEntry(index);
                         },
                       )
                           : null,
@@ -250,36 +272,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   }).toList(),
                 ),
               ),
-
               SizedBox(height: 30),
-              Text("Insights",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.purple.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(Icons.emoji_events, color: Colors.purple),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Best Hydration Day',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text(
-                              "You're most consistent on Saturdays with an average of 2.3L"),
-                        ],
-                      ),
-                    )
-                  ],
-                ),
-              ),
+              // Insights محيتهم حسب طلبك
             ],
           ),
         ),

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:async';
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:permission_handler/permission_handler.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -13,72 +16,126 @@ class _ProfileScreenState extends State<ProfileScreen> {
   double currentGoal = 3.0;
   double newGoal = 2.5;
   int selectedPreset = 2;
-  bool notificationsEnabled = true;
-  int reminderIntervalHours = 0; // تبدأ بدقيقة (تجربة)
+  bool notificationsEnabled = false;
 
-  final TextEditingController _goalController =
-  TextEditingController(text: '2.5');
+  int reminderIntervalValue = 10;
+  String reminderIntervalUnit = 'seconds';
 
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-  FlutterLocalNotificationsPlugin();
+  final TextEditingController _goalController = TextEditingController(text: '2.5');
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  Timer? _customNotificationTimer;
 
   @override
   void initState() {
     super.initState();
     tz.initializeTimeZones();
+    _requestNotificationPermission();
     _initializeNotifications();
   }
 
-  Future<void> _initializeNotifications() async {
-    const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
+  Future<void> _requestNotificationPermission() async {
+    final status = await Permission.notification.request();
+    print('Notification permission status: $status');
+  }
 
-    const InitializationSettings initializationSettings =
-    InitializationSettings(android: initializationSettingsAndroid);
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
 
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-    if (notificationsEnabled) {
-      _scheduleReminderNotification();
-    }
   }
 
-  Future<void> _scheduleReminderNotification() async {
-    await flutterLocalNotificationsPlugin.cancelAll();
-
-    const NotificationDetails details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'water_reminder_channel',
-        'Water Reminder',
-        channelDescription: 'Channel for water reminders',
-        importance: Importance.max,
-        priority: Priority.high,
-      ),
+  Future<void> _showNotification(String title, String body) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'reminder_channel',
+      'Water Reminders',
+      importance: Importance.high,
+      priority: Priority.high,
     );
 
-    if (reminderIntervalHours == 0) {
-      // تجربة: كل دقيقة
-      await flutterLocalNotificationsPlugin.periodicallyShow(
-        0,
-        '📢 تذكير: اشرب الماء 💧',
-        'حافظ على صحتك بشرب الماء بانتظام',
-        RepeatInterval.everyMinute,
-        details,
-        androidAllowWhileIdle: true,
-      );
-    } else {
-      // مؤقتًا: لا إشعار ← تطوير لاحقًا
-      print("🔕 إشعار كل $reminderIntervalHours ساعة غير مفعل حالياً.");
+    const NotificationDetails notificationDetails = NotificationDetails(android: androidDetails);
+
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      title,
+      body,
+      notificationDetails,
+    );
+  }
+
+  void _startCustomNotification(Duration interval) {
+    _customNotificationTimer?.cancel();
+    _customNotificationTimer = Timer.periodic(interval, (timer) {
+      _showNotification('💧 تذكير شرب الماء', 'حان وقت شرب الماء!');
+    });
+  }
+
+  void _stopCustomNotification() {
+    _customNotificationTimer?.cancel();
+    _customNotificationTimer = null;
+  }
+
+  Duration? _getDurationFromInput() {
+    if (reminderIntervalValue <= 0) return null;
+
+    switch (reminderIntervalUnit) {
+      case 'seconds':
+        return Duration(seconds: reminderIntervalValue);
+      case 'minutes':
+        return Duration(minutes: reminderIntervalValue);
+      case 'hours':
+        return Duration(hours: reminderIntervalValue);
+      default:
+        return null;
     }
   }
 
-  Future<void> _cancelNotifications() async {
-    await flutterLocalNotificationsPlugin.cancelAll();
+  void _toggleNotifications() {
+    if (notificationsEnabled) {
+      _stopCustomNotification();
+      setState(() {
+        notificationsEnabled = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم إيقاف التذكيرات')),
+      );
+    } else {
+      final duration = _getDurationFromInput();
+      if (duration != null) {
+        _startCustomNotification(duration);
+        setState(() {
+          notificationsEnabled = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم تفعيل التذكير كل $reminderIntervalValue ${_getDisplayUnit(reminderIntervalUnit)}')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('الرجاء إدخال مدة صالحة')),
+        );
+      }
+    }
+  }
+
+  String _getDisplayUnit(String unit) {
+    switch (unit) {
+      case 'seconds':
+        return 'ثواني';
+      case 'minutes':
+        return 'دقائق';
+      case 'hours':
+        return 'ساعات';
+      default:
+        return '';
+    }
   }
 
   @override
   void dispose() {
     _goalController.dispose();
+    _customNotificationTimer?.cancel();
     super.dispose();
   }
 
@@ -94,18 +151,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       newGoal = currentGoal;
       selectedPreset = 2;
-      notificationsEnabled = true;
-      reminderIntervalHours = 0;
+      notificationsEnabled = false;
+      reminderIntervalValue = 10;
+      reminderIntervalUnit = 'seconds';
       _goalController.text = currentGoal.toStringAsFixed(1);
     });
-    _scheduleReminderNotification();
+    _stopCustomNotification();
   }
 
   void _saveGoal() {
     setState(() {
       currentGoal = newGoal;
     });
-    // نحينا إشعار حفظ الهدف
   }
 
   @override
@@ -148,15 +205,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const Text('Current target'),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.green.shade100,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Text('Active',
                         style: TextStyle(
-                            color: Colors.green, fontWeight: FontWeight.bold)),
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold)),
                   )
                 ],
               ),
@@ -170,8 +227,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: 180,
                 child: TextFormField(
                   controller: _goalController,
-                  keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: Colors.blue.shade50,
@@ -215,58 +271,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
             const SizedBox(height: 30),
-            const Text('Preferences',
+            const Text('Reminder Settings',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            SwitchListTile(
-              title: const Text('Notifications'),
-              subtitle: const Text('Remind me to drink water'),
-              value: notificationsEnabled,
-              onChanged: (val) {
-                setState(() {
-                  notificationsEnabled = val;
-                });
-                if (val) {
-                  _scheduleReminderNotification();
-                } else {
-                  _cancelNotifications();
-                }
-              },
-              secondary: const Icon(Icons.notifications),
-            ),
-            if (notificationsEnabled)
-              Padding(
-                padding: const EdgeInsets.only(top: 12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Reminder Interval',
-                      style:
-                      TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    initialValue: reminderIntervalValue.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Value',
+                      border: OutlineInputBorder(),
                     ),
-                    const SizedBox(height: 8),
-                    DropdownButton<int>(
-                      value: reminderIntervalHours,
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            reminderIntervalHours = value;
-                          });
-                          _scheduleReminderNotification();
+                    onChanged: (value) {
+                      final parsed = int.tryParse(value);
+                      if (parsed != null && parsed > 0) {
+                        setState(() {
+                          reminderIntervalValue = parsed;
+                        });
+                        if (notificationsEnabled) {
+                          _toggleNotifications();
+                          _toggleNotifications();
                         }
-                      },
-                      items: [0, 1, 2, 3, 4, 6, 8, 12].map((hour) {
-                        return DropdownMenuItem(
-                          value: hour,
-                          child: Text(hour == 0
-                              ? 'Every minute (for testing)'
-                              : 'Every $hour hour${hour > 1 ? 's' : ''}'),
-                        );
-                      }).toList(),
-                    ),
-                  ],
+                      }
+                    },
+                  ),
                 ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: reminderIntervalUnit,
+                    decoration: const InputDecoration(
+                      labelText: 'Unit',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['seconds', 'minutes', 'hours'].map((unit) {
+                      return DropdownMenuItem(
+                        value: unit,
+                        child: Text(unit[0].toUpperCase() + unit.substring(1)),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          reminderIntervalUnit = value;
+                        });
+                        if (notificationsEnabled) {
+                          _toggleNotifications();
+                          _toggleNotifications();
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: ElevatedButton.icon(
+                icon: Icon(notificationsEnabled
+                    ? Icons.notifications_off
+                    : Icons.notifications_active),
+                label: Text(notificationsEnabled
+                    ? 'إيقاف التذكيرات'
+                    : 'تشغيل التذكيرات'),
+                onPressed: _toggleNotifications,
               ),
+            ),
             const SizedBox(height: 20),
             Row(
               children: [
