@@ -6,7 +6,7 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  final double todayTotal = 2.3;
+  double todayTotal = 2.3; // لازم تتغير لما تحذف سجل الميه
   final double goal = 3.0;
 
   final Map<String, double> weeklyData = {
@@ -74,6 +74,34 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
+  void _removeLogEntry(int index) {
+    setState(() {
+      if (dailyLogs[selectedDay] != null && dailyLogs[selectedDay]!.isNotEmpty) {
+        // نقص الكمية من todayTotal حسب اللي حذفناه (نحوّل ml أو L لنوع double)
+        String amountStr = dailyLogs[selectedDay]![index]['amount'] ?? '';
+        double amountValue = _parseAmount(amountStr);
+        todayTotal = (todayTotal - amountValue).clamp(0, double.infinity);
+
+        dailyLogs[selectedDay]!.removeAt(index);
+      }
+    });
+  }
+
+  double _parseAmount(String amount) {
+    // متوقع شكل '+250ml' أو '+1.0L'
+    try {
+      String clean = amount.replaceAll('+', '').toLowerCase();
+      if (clean.endsWith('ml')) {
+        String numStr = clean.replaceAll('ml', '').trim();
+        return double.parse(numStr) / 1000.0; // نحول مللتر للتر
+      } else if (clean.endsWith('l')) {
+        String numStr = clean.replaceAll('l', '').trim();
+        return double.parse(numStr);
+      }
+    } catch (_) {}
+    return 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     double progress = (todayTotal / goal).clamp(0, 1);
@@ -99,7 +127,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   style: TextStyle(color: Colors.grey[600])),
               SizedBox(height: 20),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
                     child: Container(
@@ -128,27 +155,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: Container(
-                      margin: EdgeInsets.only(left: 8),
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(Icons.trending_up, color: Colors.green),
-                          SizedBox(height: 8),
-                          Text('${(progress * 100).toStringAsFixed(0)}%',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 18)),
-                          SizedBox(height: 4),
-                          Text('Goal Progress'),
-                        ],
-                      ),
-                    ),
-                  )
                 ],
               ),
               SizedBox(height: 30),
@@ -192,7 +198,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 }).toList(),
               ),
               SizedBox(height: 30),
-
               Text("Daily Water Log",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               SizedBox(height: 12),
@@ -259,9 +264,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           ? IconButton(
                         icon: Icon(Icons.delete, color: Colors.red),
                         onPressed: () {
-                          setState(() {
-                            dailyLogs[selectedDay]!.removeAt(index);
-                          });
+                          _removeLogEntry(index);
                         },
                       )
                           : null,
@@ -269,36 +272,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   }).toList(),
                 ),
               ),
-
               SizedBox(height: 30),
-              Text("Insights",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.purple.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(Icons.emoji_events, color: Colors.purple),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Best Hydration Day',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text(
-                              "You're most consistent on Saturdays with an average of 2.3L"),
-                        ],
-                      ),
-                    )
-                  ],
-                ),
-              ),
+              // Insights محيتهم حسب طلبك
             ],
           ),
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -14,7 +15,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   double newGoal = 2.5;
   int selectedPreset = 2;
   bool notificationsEnabled = true;
-  int reminderIntervalHours = 0; // تبدأ بدقيقة (تجربة)
+
+  int reminderIntervalValue = 10;
+  String reminderIntervalUnit = 'seconds';
 
   final TextEditingController _goalController =
   TextEditingController(text: '2.5');
@@ -56,19 +59,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
 
-    if (reminderIntervalHours == 0) {
-      // تجربة: كل دقيقة
-      await flutterLocalNotificationsPlugin.periodicallyShow(
-        0,
+    Duration interval;
+    if (reminderIntervalUnit == 'seconds') {
+      interval = Duration(seconds: reminderIntervalValue);
+    } else if (reminderIntervalUnit == 'minutes') {
+      interval = Duration(minutes: reminderIntervalValue);
+    } else {
+      interval = Duration(hours: reminderIntervalValue);
+    }
+
+    final now = tz.TZDateTime.now(tz.local);
+    final firstNotificationTime = now.add(interval);
+
+    for (int i = 0; i < 24; i++) {
+      final scheduledTime = firstNotificationTime.add(interval * i);
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        i,
         '📢 تذكير: اشرب الماء 💧',
         'حافظ على صحتك بشرب الماء بانتظام',
-        RepeatInterval.everyMinute,
+        scheduledTime,
         details,
         androidAllowWhileIdle: true,
+        uiLocalNotificationDateInterpretation:
+        UILocalNotificationDateInterpretation.absoluteTime,
       );
-    } else {
-      // مؤقتًا: لا إشعار ← تطوير لاحقًا
-      print("🔕 إشعار كل $reminderIntervalHours ساعة غير مفعل حالياً.");
     }
   }
 
@@ -95,7 +109,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       newGoal = currentGoal;
       selectedPreset = 2;
       notificationsEnabled = true;
-      reminderIntervalHours = 0;
+      reminderIntervalValue = 10;
+      reminderIntervalUnit = 'seconds';
       _goalController.text = currentGoal.toStringAsFixed(1);
     });
     _scheduleReminderNotification();
@@ -105,7 +120,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       currentGoal = newGoal;
     });
-    // نحينا إشعار حفظ الهدف
   }
 
   @override
@@ -148,15 +162,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const Text('Current target'),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 4),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.green.shade100,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Text('Active',
                         style: TextStyle(
-                            color: Colors.green, fontWeight: FontWeight.bold)),
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold)),
                   )
                 ],
               ),
@@ -181,7 +196,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     prefixIcon: const Icon(Icons.water_drop_outlined),
                     labelText: 'Goal (Liters)',
-                    labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    labelStyle:
+                    const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   textAlign: TextAlign.center,
                   onChanged: (value) {
@@ -209,13 +225,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Column(
               children: [
                 _presetTile('Light Activity', 1.5, 0, Colors.blue.shade100),
-                _presetTile('Moderate Activity', 2.0, 1, Colors.green.shade100),
-                _presetTile('Active Lifestyle', 2.5, 2, Colors.orange.shade100),
+                _presetTile(
+                    'Moderate Activity', 2.0, 1, Colors.green.shade100),
+                _presetTile(
+                    'Active Lifestyle', 2.5, 2, Colors.orange.shade100),
                 _presetTile('High Performance', 3.0, 3, Colors.red.shade100),
               ],
             ),
             const SizedBox(height: 30),
-            const Text('Preferences',
+            const Text('Reminder Settings',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             SwitchListTile(
               title: const Text('Notifications'),
@@ -236,33 +254,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (notificationsEnabled)
               Padding(
                 padding: const EdgeInsets.only(top: 12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    const Text(
-                      'Reminder Interval',
-                      style:
-                      TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    Expanded(
+                      child: TextFormField(
+                        initialValue: reminderIntervalValue.toString(),
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Value',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) {
+                          final parsed = int.tryParse(value);
+                          if (parsed != null && parsed > 0) {
+                            setState(() {
+                              reminderIntervalValue = parsed;
+                            });
+                            _scheduleReminderNotification();
+                          }
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    DropdownButton<int>(
-                      value: reminderIntervalHours,
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            reminderIntervalHours = value;
-                          });
-                          _scheduleReminderNotification();
-                        }
-                      },
-                      items: [0, 1, 2, 3, 4, 6, 8, 12].map((hour) {
-                        return DropdownMenuItem(
-                          value: hour,
-                          child: Text(hour == 0
-                              ? 'Every minute (for testing)'
-                              : 'Every $hour hour${hour > 1 ? 's' : ''}'),
-                        );
-                      }).toList(),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: reminderIntervalUnit,
+                        decoration: const InputDecoration(
+                          labelText: 'Unit',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: ['seconds', 'minutes', 'hours'].map((unit) {
+                          return DropdownMenuItem(
+                            value: unit,
+                            child: Text(unit[0].toUpperCase() + unit.substring(1)),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              reminderIntervalUnit = value;
+                            });
+                            _scheduleReminderNotification();
+                          }
+                        },
+                      ),
                     ),
                   ],
                 ),
