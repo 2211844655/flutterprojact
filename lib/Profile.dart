@@ -172,7 +172,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.blue,
         elevation: 0,
-        title: const Text('Profile',
+        title: const Text('Home.dart',
             style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
