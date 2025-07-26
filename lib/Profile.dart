@@ -99,7 +99,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         notificationsEnabled = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إيقاف التذكيرات')),
+        const SnackBar(content: Text('Notifications are disabled')),
       );
     } else {
       final duration = _getDurationFromInput();
@@ -109,11 +109,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           notificationsEnabled = true;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم تفعيل التذكير كل $reminderIntervalValue ${_getDisplayUnit(reminderIntervalUnit)}')),
+          SnackBar(content: Text('Reminder activated $reminderIntervalValue ${_getDisplayUnit(reminderIntervalUnit)}')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('الرجاء إدخال مدة صالحة')),
+          const SnackBar(content: Text('Please enter a valid period')),
         );
       }
     }
@@ -299,8 +299,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? Icons.notifications_off
                     : Icons.notifications_active),
                 label: Text(notificationsEnabled
-                    ? 'إيقاف التذكيرات'
-                    : 'تشغيل التذكيرات'),
+                    ? 'Stop notification'
+                    : 'Activate notifications'),
                 onPressed: _toggleNotifications,
               ),
             ),
