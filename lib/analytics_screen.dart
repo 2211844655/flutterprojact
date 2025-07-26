@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   @override
@@ -6,41 +7,32 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  double todayTotal = 2.3; // لازم تتغير لما تحذف سجل الميه
+  double todayTotal = 2.3;
   final double goal = 3.0;
-
-  final Map<String, double> weeklyData = {
-    'Mon': 0.85,
-    'Tue': 0.92,
-    'Wed': 0.78,
-    'Thu': 0.95,
-    'Fri': 0.88,
-    'Sat': 1.0,
-    'Sun': 0.75,
-  };
+  final int daysToShow = 14;
 
   final Map<String, List<Map<String, String>>> dailyLogs = {
-    'Mon': [
+    '2025-07-24': [
       {'amount': '+250ml', 'time': '08:00 AM'},
       {'amount': '+500ml', 'time': '12:00 PM'},
     ],
-    'Tue': [
+    '2025-07-25': [
       {'amount': '+250ml', 'time': '09:00 AM'},
     ],
-    'Wed': [
+    '2025-07-23': [
       {'amount': '+1.0L', 'time': '10:00 AM'},
       {'amount': '+250ml', 'time': '01:00 PM'},
     ],
-    'Thu': [
+    '2025-07-22': [
       {'amount': '+500ml', 'time': '07:00 AM'},
       {'amount': '+250ml', 'time': '10:00 AM'},
     ],
-    'Fri': [],
-    'Sat': [
+    '2025-07-20': [],
+    '2025-07-19': [
       {'amount': '+1.0L', 'time': '09:00 AM'},
       {'amount': '+500ml', 'time': '02:00 PM'},
     ],
-    'Sun': [
+    '2025-07-18': [
       {'amount': '+250ml', 'time': '11:00 AM'},
     ],
   };
@@ -51,49 +43,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    selectedDay = _getDayLabel(now.weekday);
-  }
-
-  String _getDayLabel(int weekday) {
-    switch (weekday) {
-      case 1:
-        return 'Mon';
-      case 2:
-        return 'Tue';
-      case 3:
-        return 'Wed';
-      case 4:
-        return 'Thu';
-      case 5:
-        return 'Fri';
-      case 6:
-        return 'Sat';
-      case 7:
-      default:
-        return 'Sun';
-    }
+    selectedDay = DateFormat('yyyy-MM-dd').format(now);
   }
 
   void _removeLogEntry(int index) {
     setState(() {
       if (dailyLogs[selectedDay] != null && dailyLogs[selectedDay]!.isNotEmpty) {
-        // نقص الكمية من todayTotal حسب اللي حذفناه (نحوّل ml أو L لنوع double)
         String amountStr = dailyLogs[selectedDay]![index]['amount'] ?? '';
         double amountValue = _parseAmount(amountStr);
         todayTotal = (todayTotal - amountValue).clamp(0, double.infinity);
-
         dailyLogs[selectedDay]!.removeAt(index);
       }
     });
   }
 
   double _parseAmount(String amount) {
-    // متوقع شكل '+250ml' أو '+1.0L'
     try {
       String clean = amount.replaceAll('+', '').toLowerCase();
       if (clean.endsWith('ml')) {
         String numStr = clean.replaceAll('ml', '').trim();
-        return double.parse(numStr) / 1000.0; // نحول مللتر للتر
+        return double.parse(numStr) / 1000.0;
       } else if (clean.endsWith('l')) {
         String numStr = clean.replaceAll('l', '').trim();
         return double.parse(numStr);
@@ -102,10 +71,46 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return 0;
   }
 
+  double _calculateTotal(String date) {
+    final logs = dailyLogs[date] ?? [];
+    return logs.fold(0.0, (sum, item) => sum + _parseAmount(item['amount']!));
+  }
+
+  void _showDayDetails(String date) {
+    final logs = dailyLogs[date] ?? [];
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$date Details'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: logs.map((entry) => ListTile(
+            title: Text(entry['amount']!),
+            subtitle: Text(entry['time']!),
+          )).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          )
+        ],
+      ),
+    );
+  }
+
+  List<String> _generateLastDates(int count) {
+    final now = DateTime.now();
+    return List.generate(count, (i) {
+      final date = now.subtract(Duration(days: i));
+      return DateFormat('yyyy-MM-dd').format(date);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     double progress = (todayTotal / goal).clamp(0, 1);
-    final isToday = selectedDay == _getDayLabel(DateTime.now().weekday);
+    final isToday = selectedDay == DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -158,83 +163,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 ],
               ),
               SizedBox(height: 30),
-              Text('Weekly Progress',
+              Text("Today's Water Log",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: weeklyData.entries.map((entry) {
-                  return Column(
-                    children: [
-                      Container(
-                        width: 20,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: entry.key == 'Sun'
-                              ? Colors.blue
-                              : Colors.blue.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: Container(
-                            height: 80 * entry.value,
-                            width: 20,
-                            decoration: BoxDecoration(
-                              color: entry.key == 'Sun'
-                                  ? Colors.blue.shade900
-                                  : Colors.blue,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(entry.key),
-                      Text('${(entry.value * 100).toStringAsFixed(0)}%',
-                          style: TextStyle(fontSize: 12))
-                    ],
-                  );
-                }).toList(),
-              ),
-              SizedBox(height: 30),
-              Text("Daily Water Log",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              SizedBox(height: 12),
-              SizedBox(
-                height: 50,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: dailyLogs.keys.map((day) {
-                    final isSelected = day == selectedDay;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          selectedDay = day;
-                        });
-                      },
-                      child: Container(
-                        margin: EdgeInsets.symmetric(horizontal: 6),
-                        padding:
-                        EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color:
-                          isSelected ? Colors.blue : Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Center(
-                          child: Text(day,
-                              style: TextStyle(
-                                color:
-                                isSelected ? Colors.white : Colors.black87,
-                                fontWeight: FontWeight.bold,
-                              )),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
               SizedBox(height: 16),
               Container(
                 decoration: BoxDecoration(
@@ -248,7 +178,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       .map((entry) {
                     final index = entry.key;
                     final log = entry.value;
-
                     return ListTile(
                       leading: Icon(Icons.water_drop, color: Colors.blue),
                       title: Text(log['amount']!),
@@ -273,7 +202,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 ),
               ),
               SizedBox(height: 30),
-              // Insights محيتهم حسب طلبك
+              Text("History",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              SizedBox(height: 10),
+              ..._generateLastDates(daysToShow).map((date) {
+                double total = _calculateTotal(date);
+                bool reached = total >= goal;
+                return Card(
+                  child: ListTile(
+                    leading: Icon(reached ? Icons.check : Icons.close,
+                        color: reached ? Colors.green : Colors.red),
+                    title: Text(date),
+                    subtitle: Text('Total: ${total.toStringAsFixed(2)} L'),
+                    trailing: Text(reached ? 'Goal Met' : 'Not Met'),
+                    onTap: () => _showDayDetails(date),
+                  ),
+                );
+              }).toList(),
             ],
           ),
         ),
