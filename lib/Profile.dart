@@ -183,41 +183,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
-            const Text('Daily Goal',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.green.shade100),
-                borderRadius: BorderRadius.circular(16),
-                color: Colors.green.shade50,
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.track_changes, color: Colors.green),
-                  const SizedBox(width: 12),
-                  Text('${currentGoal.toStringAsFixed(1)}L',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 8),
-                  const Text('Current target'),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text('Active',
-                        style: TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold)),
-                  )
-                ],
-              ),
-            ),
             const SizedBox(height: 30),
             const Text('Adjust Goal',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
