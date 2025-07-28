@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+
+// استخدام prefs كمتغير عام من main.dart
+import 'main.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   @override
@@ -7,36 +12,12 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  double todayTotal = 2.3;
-  final double goal = 3.0;
+  double todayTotal = 0.0; // سيتم حسابه من dailyLogs
+  double currentDailyGoal = 3.0; // الهدف الحالي، سيتم تحميله من SharedPreferences
   final int daysToShow = 14;
 
-  final Map<String, List<Map<String, String>>> dailyLogs = {
-    '2025-07-24': [
-      {'amount': '+250ml', 'time': '08:00 AM'},
-      {'amount': '+500ml', 'time': '12:00 PM'},
-    ],
-    '2025-07-25': [
-      {'amount': '+250ml', 'time': '09:00 AM'},
-    ],
-    '2025-07-23': [
-      {'amount': '+1.0L', 'time': '10:00 AM'},
-      {'amount': '+250ml', 'time': '01:00 PM'},
-    ],
-    '2025-07-22': [
-      {'amount': '+500ml', 'time': '07:00 AM'},
-      {'amount': '+250ml', 'time': '10:00 AM'},
-    ],
-    '2025-07-20': [],
-    '2025-07-19': [
-      {'amount': '+1.0L', 'time': '09:00 AM'},
-      {'amount': '+500ml', 'time': '02:00 PM'},
-    ],
-    '2025-07-18': [
-      {'amount': '+250ml', 'time': '11:00 AM'},
-    ],
-  };
-
+  Map<String, List<Map<String, String>>> dailyLogs = {};
+  Map<String, double> dailyGoals = {}; // لتخزين الهدف لكل يوم
   late String selectedDay;
 
   @override
@@ -44,6 +25,47 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     super.initState();
     final now = DateTime.now();
     selectedDay = DateFormat('yyyy-MM-dd').format(now);
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    // تحميل الهدف الحالي
+    currentDailyGoal = prefs.getDouble('dailyGoal') ?? 3.0;
+
+    // تحميل جميع سجلات المياه
+    final String? savedLogsJson = prefs.getString('dailyLogs');
+    if (savedLogsJson != null) {
+      dailyLogs = Map<String, List<Map<String, String>>>.from(
+        (json.decode(savedLogsJson) as Map).map((key, value) => MapEntry(
+            key,
+            (value as List)
+                .map((item) => Map<String, String>.from(item))
+                .toList())),
+      );
+    } else {
+      dailyLogs = {}; // تهيئة الخريطة فارغة إذا لم يكن هناك سجلات
+    }
+
+    // تحميل الأهداف اليومية المحفوظة
+    final String? savedDailyGoalsJson = prefs.getString('dailyGoals');
+    if (savedDailyGoalsJson != null) {
+      dailyGoals = Map<String, double>.from(
+        (json.decode(savedDailyGoalsJson) as Map).map((key, value) => MapEntry(key, value as double)),
+      );
+    } else {
+      dailyGoals = {}; // تهيئة الخريطة فارغة إذا لم يكن هناك أهداف
+    }
+
+    todayTotal = _calculateTotal(selectedDay); // حساب الإجمالي لليوم المحدد
+
+    setState(() {});
+  }
+
+  Future<void> _saveData() async {
+    final logsJson = json.encode(dailyLogs);
+    await prefs.setString('dailyLogs', logsJson);
+    final dailyGoalsJson = json.encode(dailyGoals);
+    await prefs.setString('dailyGoals', dailyGoalsJson);
   }
 
   void _removeLogEntry(int index) {
@@ -51,8 +73,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       if (dailyLogs[selectedDay] != null && dailyLogs[selectedDay]!.isNotEmpty) {
         String amountStr = dailyLogs[selectedDay]![index]['amount'] ?? '';
         double amountValue = _parseAmount(amountStr);
-        todayTotal = (todayTotal - amountValue).clamp(0, double.infinity);
         dailyLogs[selectedDay]!.removeAt(index);
+        todayTotal = (todayTotal - amountValue).clamp(0, double.infinity); // تحديث الإجمالي
+
+        _saveData(); // حفظ التغييرات بعد الحذف
       }
     });
   }
@@ -76,40 +100,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return logs.fold(0.0, (sum, item) => sum + _parseAmount(item['amount']!));
   }
 
-  void _showDayDetails(String date) {
-    final logs = dailyLogs[date] ?? [];
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('$date Details'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: logs.map((entry) => ListTile(
-            title: Text(entry['amount']!),
-            subtitle: Text(entry['time']!),
-          )).toList(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
-          )
-        ],
-      ),
-    );
-  }
-
   List<String> _generateLastDates(int count) {
     final now = DateTime.now();
-    return List.generate(count, (i) {
+    List<String> dates = [];
+    for (int i = 0; i < count; i++) {
       final date = now.subtract(Duration(days: i));
-      return DateFormat('yyyy-MM-dd').format(date);
-    });
+      dates.add(DateFormat('yyyy-MM-dd').format(date));
+    }
+    return dates;
   }
 
   @override
   Widget build(BuildContext context) {
-    double progress = (todayTotal / goal).clamp(0, 1);
+    double progress = (todayTotal / currentDailyGoal).clamp(0, 1);
     final isToday = selectedDay == DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     return Scaffold(
@@ -117,7 +120,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       appBar: AppBar(
         title: Text('Analytics',
             style: TextStyle(
-                fontWeight: FontWeight.bold, color: Colors.white, fontSize: 35)),
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontSize: 35)),
         backgroundColor: Colors.blue,
         elevation: 0,
         centerTitle: false,
@@ -205,20 +210,45 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               Text("History",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               SizedBox(height: 10),
-              ..._generateLastDates(daysToShow).map((date) {
-                double total = _calculateTotal(date);
-                bool reached = total >= goal;
-                return Card(
-                  child: ListTile(
-                    leading: Icon(reached ? Icons.check : Icons.close,
-                        color: reached ? Colors.green : Colors.red),
-                    title: Text(date),
-                    subtitle: Text('Total: ${total.toStringAsFixed(2)} L'),
-                    trailing: Text(reached ? 'Goal Met' : 'Not Met'),
-                    onTap: () => _showDayDetails(date),
-                  ),
-                );
-              }).toList(),
+              Column(
+                children: _generateLastDates(daysToShow).map((date) {
+                  double total = _calculateTotal(date);
+                  // استخدم الهدف المحفوظ لذلك اليوم، وإلا استخدم الهدف الحالي كافتراضي
+                  double dayGoal = dailyGoals[date] ?? currentDailyGoal;
+                  bool reached = total >= dayGoal;
+                  List<Map<String, String>> logs = dailyLogs[date] ?? [];
+
+                  return Card(
+                    elevation: 2,
+                    margin: EdgeInsets.symmetric(vertical: 4),
+                    child: ExpansionTile(
+                      leading: Icon(reached ? Icons.check : Icons.close,
+                          color: reached ? Colors.green : Colors.red),
+                      title: Text(DateFormat('yyyy-MM-dd')
+                          .format(DateTime.parse(date))),
+                      subtitle:
+                      Text('Total: ${total.toStringAsFixed(2)} L / Goal: ${dayGoal.toStringAsFixed(1)} L'),
+                      children: logs.isEmpty
+                          ? [
+                        ListTile(
+                          title: Text(
+                            'No logs for this day.',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        )
+                      ]
+                          : logs.map((log) {
+                        return ListTile(
+                          leading: Icon(Icons.water_drop,
+                              color: Colors.blue),
+                          title: Text(log['amount']!),
+                          subtitle: Text(log['time']!),
+                        );
+                      }).toList(),
+                    ),
+                  );
+                }).toList(),
+              ),
             ],
           ),
         ),

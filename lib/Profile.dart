@@ -4,6 +4,10 @@ import 'dart:async';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// استخدام prefs كمتغير عام من main.dart
+import 'main.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -14,14 +18,14 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   double currentGoal = 3.0;
-  double newGoal = 2.5;
-  int selectedPreset = 2;
+  double newGoal = 3.0; // لتعديل الهدف قبل الحفظ
+  int selectedPreset = 2; // Default to 'Active Lifestyle'
   bool notificationsEnabled = false;
 
   int reminderIntervalValue = 10;
   String reminderIntervalUnit = 'seconds';
 
-  final TextEditingController _goalController = TextEditingController(text: '2.5');
+  late TextEditingController _goalController;
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   Timer? _customNotificationTimer;
@@ -29,9 +33,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _goalController = TextEditingController(text: currentGoal.toStringAsFixed(1));
     tz.initializeTimeZones();
     _requestNotificationPermission();
     _initializeNotifications();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    currentGoal = prefs.getDouble('dailyGoal') ?? 3.0;
+    newGoal = currentGoal; // قم بتحديث newGoal أيضًا
+    _goalController.text = currentGoal.toStringAsFixed(1);
+
+    notificationsEnabled = prefs.getBool('notificationsEnabled') ?? false;
+    reminderIntervalValue = prefs.getInt('reminderIntervalValue') ?? 10;
+    reminderIntervalUnit = prefs.getString('reminderIntervalUnit') ?? 'seconds';
+
+    setState(() {
+      // بعد تحميل البيانات، قم بتحديث selectedPreset بناءً على currentGoal
+      if (currentGoal == 1.5) {
+        selectedPreset = 0;
+      } else if (currentGoal == 2.0) {
+        selectedPreset = 1;
+      } else if (currentGoal == 2.5) {
+        selectedPreset = 2;
+      } else if (currentGoal == 3.0) {
+        selectedPreset = 3;
+      } else {
+        selectedPreset = -1; // لا يوجد preset مطابق
+      }
+
+      if (notificationsEnabled) {
+        final duration = _getDurationFromInput();
+        if (duration != null) {
+          _startCustomNotification(duration);
+        }
+      }
+    });
+  }
+
+  Future<void> _saveSettings() async {
+    await prefs.setDouble('dailyGoal', currentGoal);
+    await prefs.setBool('notificationsEnabled', notificationsEnabled);
+    await prefs.setInt('reminderIntervalValue', reminderIntervalValue);
+    await prefs.setString('reminderIntervalUnit', reminderIntervalUnit);
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -51,6 +96,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'reminder_channel',
       'Water Reminders',
+      channelDescription: 'Channel for water intake reminders',
       importance: Importance.high,
       priority: Priority.high,
     );
@@ -98,6 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         notificationsEnabled = false;
       });
+      _saveSettings();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Notifications are disabled')),
       );
@@ -108,8 +155,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           notificationsEnabled = true;
         });
+        _saveSettings();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Reminder activated $reminderIntervalValue ${_getDisplayUnit(reminderIntervalUnit)}')),
+          SnackBar(content: Text('Reminder activated every $reminderIntervalValue ${_getDisplayUnit(reminderIntervalUnit)}')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -149,20 +197,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _resetSettings() {
     setState(() {
+      currentGoal = 3.0; // تعيين الافتراضي
       newGoal = currentGoal;
-      selectedPreset = 2;
+      selectedPreset = 2; // يعود إلى Active Lifestyle
       notificationsEnabled = false;
       reminderIntervalValue = 10;
       reminderIntervalUnit = 'seconds';
       _goalController.text = currentGoal.toStringAsFixed(1);
     });
     _stopCustomNotification();
+    _saveSettings(); // حفظ الإعدادات الافتراضية
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Settings have been reset to default.')),
+    );
   }
 
   void _saveGoal() {
     setState(() {
       currentGoal = newGoal;
     });
+    _saveSettings(); // حفظ الهدف الجديد
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Daily goal saved: ${currentGoal.toStringAsFixed(1)}L')),
+    );
   }
 
   @override
@@ -172,7 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.blue,
         elevation: 0,
-        title: const Text('Home.dart',
+        title: const Text('Profile', // تم تصحيح الاسم هنا
             style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -210,6 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (parsed != null && parsed >= 0.5 && parsed <= 5.0) {
                       setState(() {
                         newGoal = parsed;
+                        selectedPreset = -1; // إلغاء تحديد الـ preset إذا تم التعديل يدويًا
                       });
                     }
                   },
@@ -255,9 +313,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         setState(() {
                           reminderIntervalValue = parsed;
                         });
+                        // إذا كانت الإشعارات مفعلة، أعد تفعيلها بالفاصل الزمني الجديد
                         if (notificationsEnabled) {
-                          _toggleNotifications();
-                          _toggleNotifications();
+                          _stopCustomNotification();
+                          final duration = _getDurationFromInput();
+                          if (duration != null) {
+                            _startCustomNotification(duration);
+                          }
                         }
                       }
                     },
@@ -282,9 +344,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         setState(() {
                           reminderIntervalUnit = value;
                         });
+                        // إذا كانت الإشعارات مفعلة، أعد تفعيلها بالفاصل الزمني الجديد
                         if (notificationsEnabled) {
-                          _toggleNotifications();
-                          _toggleNotifications();
+                          _stopCustomNotification();
+                          final duration = _getDurationFromInput();
+                          if (duration != null) {
+                            _startCustomNotification(duration);
+                          }
                         }
                       }
                     },
@@ -302,6 +368,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? 'Stop notification'
                     : 'Activate notifications'),
                 onPressed: _toggleNotifications,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: notificationsEnabled ? Colors.red.shade400 : Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -311,6 +383,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: ElevatedButton(
                     onPressed: _saveGoal,
                     child: const Text('Save Goal'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -318,6 +396,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: OutlinedButton(
                     onPressed: _resetSettings,
                     child: const Text('Reset Settings'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blue,
+                      side: BorderSide(color: Colors.blue),
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
               ],

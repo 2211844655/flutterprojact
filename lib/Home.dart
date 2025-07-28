@@ -1,6 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:intl/intl.dart';
+
+// استخدام prefs كمتغير عام من main.dart
+import 'main.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -9,29 +15,99 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   double currentWater = 0;
-  double goal = 3.0;
+  double goal = 3.0; // سيتم تحميله من SharedPreferences
   bool goalReachedNotified = false;
 
-  TextEditingController _customController = TextEditingController();
+  final TextEditingController _customController = TextEditingController();
 
+  Map<String, List<Map<String, String>>> dailyLogs = {};
+  Map<String, double> dailyGoals = {}; // تم إضافة هذه الخريطة لحفظ الهدف لكل يوم
 
-  void addWater(double amount) {
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
 
-    @override
-    void dispose() {
-      _customController.dispose();
-      super.dispose();
+  Future<void> _loadData() async {
+    // تحميل الهدف الحالي
+    goal = prefs.getDouble('dailyGoal') ?? 3.0;
+
+    // تحميل جميع سجلات المياه
+    final String? savedLogsJson = prefs.getString('dailyLogs');
+    if (savedLogsJson != null) {
+      dailyLogs = Map<String, List<Map<String, String>>>.from(
+        (json.decode(savedLogsJson) as Map).map((key, value) => MapEntry(
+            key,
+            (value as List)
+                .map((item) => Map<String, String>.from(item))
+                .toList())),
+      );
     }
 
+    // تحميل الأهداف اليومية المحفوظة
+    final String? savedDailyGoalsJson = prefs.getString('dailyGoals');
+    if (savedDailyGoalsJson != null) {
+      dailyGoals = Map<String, double>.from(
+        (json.decode(savedDailyGoalsJson) as Map).map((key, value) => MapEntry(key, value as double)),
+      );
+    }
 
+    currentWater = _calculateTotal(DateFormat('yyyy-MM-dd').format(DateTime.now())); // حساب الإجمالي لليوم الحالي من السجلات المحفوظة
+    setState(() {});
+  }
+
+  double _calculateTotal(String date) {
+    final logs = dailyLogs[date] ?? [];
+    return logs.fold(0.0, (sum, item) => sum + _parseAmount(item['amount']!));
+  }
+
+  Future<void> _saveData() async {
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    // حفظ الهدف الحالي لليوم
+    dailyGoals[today] = goal; // هنا يتم حفظ الهدف الخاص باليوم الحالي
+
+    final logsJson = json.encode(dailyLogs);
+    final dailyGoalsJson = json.encode(dailyGoals); // تحويل الأهداف إلى JSON
+    await prefs.setString('dailyLogs', logsJson);
+    await prefs.setString('dailyGoals', dailyGoalsJson); // حفظ الأهداف
+    await prefs.setDouble('currentWater_$today', currentWater); // حفظ إجمالي اليوم بشكل منفصل
+  }
+
+  double _parseAmount(String amount) {
+    try {
+      String clean = amount.replaceAll('+', '').toLowerCase();
+      if (clean.endsWith('ml')) {
+        String numStr = clean.replaceAll('ml', '').trim();
+        return double.parse(numStr) / 1000.0;
+      } else if (clean.endsWith('l')) {
+        String numStr = clean.replaceAll('l', '').trim();
+        return double.parse(numStr);
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  void addWater(double amount) {
     setState(() {
       currentWater += amount;
+      final now = DateTime.now();
+      final today = DateFormat('yyyy-MM-dd').format(now);
+      final time = DateFormat('hh:mm a').format(now);
+
+      if (!dailyLogs.containsKey(today)) {
+        dailyLogs[today] = [];
+      }
+      dailyLogs[today]!.add({'amount': '+${amount * 1000}ml', 'time': time});
+
+      _saveData(); // هنا يتم استدعاء حفظ البيانات بما في ذلك الهدف اليومي
+
       double progress = (currentWater / goal).clamp(0, 1);
 
       if (progress >= 1.0 && !goalReachedNotified) {
         goalReachedNotified = true;
 
-        // رسالة عند بلوغ الهدف
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -57,6 +133,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void dispose() {
+    _customController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     double progress = (currentWater / goal).clamp(0, 1);
     Color color = getProgressColor(progress);
@@ -78,7 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // خلفية الصورة
                   Container(
                     width: 450,
                     height: 260,
@@ -94,20 +175,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-
-                  // المؤشر الدائري
                   CircularPercentIndicator(
                     radius: 85.0,
                     lineWidth: 15.0,
-                    //animation: true,
                     animationDuration: 1000,
                     percent: progress,
                     circularStrokeCap: CircularStrokeCap.round,
                     progressColor: color,
                     backgroundColor: Colors.white30,
                   ),
-
-                  // الدائرة البيضاء بالمحتوى
                   Container(
                     width: 140,
                     height: 140,
@@ -132,7 +208,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
             SizedBox(height: 10),
             Center(
               child: Text("\u{1F4AA} Almost there! Keep going!",
@@ -189,7 +264,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-
           ],
         ),
       ),

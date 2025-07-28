@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:percent_indicator/percent_indicator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'Home.dart';
 import 'analytics_screen.dart';
 import 'Profile.dart';
 
-void main() {
+late SharedPreferences prefs; // متغير عام لـ SharedPreferences
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  prefs = await SharedPreferences.getInstance();
   runApp(MyApp());
 }
 
@@ -51,10 +55,9 @@ class _MainScreenState extends State<MainScreen> {
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.water_drop), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Analytics'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Home.dart'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'), // تم تصحيح الاسم هنا
         ],
       ),
     );
   }
 }
-
